@@ -119,6 +119,9 @@ Requires Python 3.10 or newer:
 uv add roboskills      # or: pip install roboskills
 ```
 
+The workflows run from a clone (`git clone https://github.com/openrobokit/roboskills && cd roboskills && uv sync`); each
+workflow's README goes on from there.
+
 ## Quick links
 
 - [Homepage](https://openrobokit.com/roboskills)
