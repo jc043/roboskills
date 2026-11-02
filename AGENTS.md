@@ -2,6 +2,10 @@
 
 Read a component's `README.md` or `SKILL.md` before using or changing it.
 
+Running a workflow to make an output (a motion-gen video, a real2sim scene) follows that workflow's `SKILL.md`:
+revising your own output in `runs/` until it is right is the work. Rules, Git and Checks below are for changing this
+repository.
+
 ## Layout
 
 | Path | Holds |

@@ -1,6 +1,6 @@
 ---
 name: character
-description: A person's SMPL-X motion (a video's from GVHMR, or Kimodo's) on a Mixamo character through RoboKit's humanoid retargeting; functions make the character a RoboKit robot with a person's joint ranges and measure its joints and skin against an object; the rest is what to know to do the remainder yourself.
+description: A person's SMPL-X motion (a video's from GVHMR, or Kimodo's) on a Mixamo character through RoboKit's humanoid retargeting; functions make the character a RoboKit robot with a person's joint ranges and measure its joints, and its skin against an object or its own body; the rest is what to know to do the remainder yourself.
 ---
 
 # Motion onto a character
@@ -80,13 +80,29 @@ Source `runs/motion_gen/env/character.sh`: it sets `ROBOSKILLS_PYTHON` (this rep
   fingers pressed together, the thumb tucked in. SMPL-X's `left_index1`-`3` (and middle, ring, pinky, thumb) are the
   Mixamo `LeftHandIndex1`-`3`.
 
-`retarget.retarget_motion(motion, character, out)` runs these targets on GVHMR's `smplx.npz` into
-`out/motion.npz`, the renderer's MOTION, with the feet the person plants held where they land (`feet`: the floor
-levelled under the person, a sole down where it is near the floor and barely moves in the picture); `check_motion`
+`retarget.retarget_motion(motion, character, out)` runs these targets on GVHMR's `smplx.npz` (or Kimodo's SMPL-X
+`_amass.npz`) into `out/motion.npz`, the renderer's MOTION, with the feet the person plants held where they land (RoboKit's `feet`, shared with robots: the floor
+levelled under the person, a sole down where GVHMR predicts it stands still, else where it is near the floor and barely
+moves in the picture; the body keeps its travel and a foot the legs cannot keep on its spot steps), after re-making
+frames GVHMR read wrong (`roboskills.tools.gvhmr.repair`). `check_motion`
 reports how far the limbs strayed. The first of a clip's solves
 starts from the T-pose: solved once, the arms end short of it, so solve the first frame a few times first. RoboKit's
 first solve failed with `may need newer version of nvJitLink library` on driver 580.178.04 (Warp 1.18.0) and worked on
 580.82.07.
+
+`fingers.retarget_fingers(character, motion, hands, out, smplx=None)` poses the fingers of a saved MOTION from WiLoR's
+`hands.npz`: each hand is a RoboKit hand (`fingers.hand_robot`: a finger's middle and end joints bend, its knuckle bends
+and spreads, the thumb also twists, each in a person's range) that RoboKit's `HandRetargeterOnline` fits to the
+directions of the person's finger segments, the person's hand matched to the character's at the wrist and knuckles, so
+the hands' sizes do not matter. Given `smplx` (the GVHMR file the motion came from), the hands also turn as WiLoR's,
+their twist about the forearm given to the forearm. It uses the detections WiLoR's `usable` keeps (on the side whose
+wrist track in the picture they continue, with that side's label, not flipped) and interpolates the frames between;
+it returns per side how many frames it saw, so a hand hidden most of the clip (behind what it holds) is mostly
+interpolated. It is for a hand that holds nothing. A hand that holds something takes its turn from WiLoR and its
+fingers from a grip you write, closed the way the video shows it holding the object: WiLoR cannot see fingers
+behind what they hold. About 10 s for 400 frames once compiled. `fingers.smplx_fingers(character, motion, amass, out)`
+fits the same hands to an AMASS SMPL-X file's `pose_hand` instead: Kimodo's `_amass.npz` holds SMPL-X's relaxed mean
+hand on every frame, which leaves a Kimodo motion's fingers relaxed rather than flat at rest.
 
 ## Joints and contact (`contact`)
 
@@ -103,6 +119,12 @@ first solve failed with `may need newer version of nvJitLink library` on driver 
   finger that went through a cup's side, or into an open container, is still only millimetres from the surface and
   reads as touching. How deep it went shows against a closed solid, such as the object's convex hull when the hand
   stays outside it.
+- `contact.inside_body(character, turns, joints, device="cuda:0")`: per hand and forearm bone of both sides
+  (`LeftHand`, `RightHandIndex2`, `LeftForeArm`...) its skin's deepest point inside the rest of the posed skin [T]
+  (mm, negative inside), every frame of a clip in seconds. The rest is everything but both arms from the shoulder
+  down, so a robe or skirt counts as body, and one arm is not measured against the other. It reads the distance at
+  each vertex of the hand's and forearm's skin, so a thin limb inside a wide sleeve, with none of the sleeve's
+  vertices in it, reads as clear.
 
 ## What to know
 

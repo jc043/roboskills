@@ -2,7 +2,7 @@
 
 Kimodo is a kinematic motion diffusion model that generates human and robot motions from text prompts and
 constraints such as keyframes and paths. Here `python -m roboskills.tools.kimodo --prompt P --out motion/` runs
-`kimodo.scripts.generate` in its own `uv` environment for Unitree G1 (Kimodo-G1-RP-v1) or SOMA skeleton motion;
+`kimodo.scripts.generate` in its own `uv` environment for Unitree G1 (Kimodo-G1-RP-v1), SOMA or SMPL-X human motion;
 motion_gen's `kimodo.sh` names that environment's python.
 See [SKILL.md](SKILL.md).
 

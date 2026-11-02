@@ -14,16 +14,15 @@ in `~/.cache/huggingface/token` needs access.
 **Call:** `python -m roboskills.tools.kimodo --prompt "PROMPT" --out motion/ [--duration 4] [--seed 0] [--model
 Kimodo-G1-RP-v1]` (or `generate_motion(...)`) for one motion, the prompt encoded in process unless an encoder serves
 at `$TEXT_ENCODER_URL`. The motion_gen workflow's `kimodo.sh` names `$KIMODO_PYTHON`, this environment's python, and
-the encoder's port. Start the text encoder once per machine, then generate:
+the encoder's port. For several calls, start the text encoder once, then generate:
 
     $KIMODO_PYTHON -m kimodo.scripts.run_text_encoder_server --tmp-folder /tmp/encoder &
     $KIMODO_PYTHON -m kimodo.scripts.generate "PROMPT" --model $KIMODO_MODEL --duration 4 --seed 0 --output STEM
 
 The encoder listens on `GRADIO_SERVER_PORT` (9571) and the generator finds it at `TEXT_ENCODER_URL`; a second run on
-the same machine needs another port; when `TEXT_ENCODER_URL` is already set, an encoder serves there. The human models
+the same machine needs another port. The human models
 are `--model Kimodo-SMPLX-RP-v1`, the SMPL-X body (22 joints; `$MOTION_KIMODO_HUMAN_MODEL`), and
 `Kimodo-SOMA-RP-v1.1`, the SOMA skeleton.
-`TEXT_ENCODER_MODE=local` encodes in process instead.
 
 **Returns** `STEM.csv` (`motion/motion.csv`) (per frame root xyz, root wxyz and the G1's 29 joint angles; Z-up, +X forward, MuJoCo's frame)
 and `STEM.npz` (joints, rotations and foot contacts in Kimodo's Y-up frame), 30 fps; `--bvh` with a human model writes

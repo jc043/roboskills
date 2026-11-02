@@ -27,7 +27,8 @@ and `out/compare_ext1.mp4` (the video | Blender | `scene/mujoco_ext1.mp4`).
 `character.load_character` reads, and `render_motion(character, motion, video, out)`, the motion_gen workflow's blender
 step, bakes the motion's turns into `out/scene.glb` ([`rig.py`](rig.py), `turns`, `positions`, `joint_names`,
 `rest_joints` in its MOTION, as `character/retarget.py` writes them), renders `--final` and encodes `out/video.mp4`
-and `out/compare.mp4` (the video | the render).
+and, given a source `video`, `out/compare.mp4` (the video | the render). Given a robot's GLB and MOTION (`link_names`, as RoboKit's
+`humanoid` writes them) it keys each GLB object named for a link to that link's `turns` and `positions` instead.
 
 **Returns** in `DIR`: by default twelve stills spread over the clip, `--frames` the listed saved frames, `--final`
 every saved frame, as resumable numbered PNGs (960×540, 32 samples by default), a contact sheet and `render.json`

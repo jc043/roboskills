@@ -8,8 +8,9 @@ from scipy.spatial.transform import Rotation
 pytest.importorskip("warp")
 pytest.importorskip("trimesh")
 
+from roboskills.tools.robokit.humanoid import Y_TO_Z, camera_side  # noqa: E402
 from roboskills.workflows.motion_gen.character.character import Character  # noqa: E402
-from roboskills.workflows.motion_gen.character.retarget import Y_TO_Z, camera_side, targets, weights  # noqa: E402
+from roboskills.workflows.motion_gen.character.retarget import targets, weights  # noqa: E402
 
 
 def tiny() -> Character:
@@ -43,9 +44,9 @@ def test_weights_cover_a_bones_both_sides_by_full_name():
     assert len(found) == 13
 
 
-def test_camera_side_is_where_the_camera_stands_from_the_person(tmp_path):
+def test_camera_side_is_where_the_camera_stands_from_the_person():
     # The person faces the camera in the picture (turned half about y) and the world's +z: the camera stands at +z.
     n = 3
-    np.savez(tmp_path / "m.npz", world_global_orient=np.zeros((n, 3)), camera_transl=np.tile([0.1, 0, 5.0], (n, 1)),
+    d = dict(world_global_orient=np.zeros((n, 3)), camera_transl=np.tile([0.1, 0, 5.0], (n, 1)),
              camera_global_orient=np.tile([0, np.pi, 0], (n, 1)))  # fmt: skip
-    assert np.allclose(camera_side(tmp_path / "m.npz"), Y_TO_Z @ [0, 0, 1.0], atol=0.03)
+    assert np.allclose(camera_side(d), Y_TO_Z @ [0, 0, 1.0], atol=0.03)

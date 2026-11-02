@@ -14,9 +14,11 @@ presentation; preserve motion arrays, prop animation, frame count and fps, and v
 
 ## Approach
 
-- Choose the motion source that fits: text-to-motion (Kimodo), motion recovered from a video (GVHMR), or motion
-  you author directly (keyframes, inverse kinematics). Choose the body the request names: a robot from RoboKit, a
-  Mixamo character (the character skill), or SMPL-X.
+- Choose the motion source: with a video, the motion recovered from it (GVHMR); without one, start from text-to-motion
+  (Kimodo). It gives a person's coordination, weight shift and timing, and given the hands' poses at the contact frames
+  (below) it brings them within centimetres of their targets, for you to settle. Author motion directly (keyframes,
+  inverse kinematics) for what Kimodo cannot make, or where its takes look less natural than an authored piece.
+  Choose the body the request names: a robot from RoboKit, a Mixamo character (the character skill), or SMPL-X.
 - If the request implies a scene, build it at real scale with the objects the action needs. The motion must respect
   it: support, contact and clearance, not just passing near it.
 - Generate contact together with the body. When a hand must reach, hold or place something, give the generator
@@ -36,9 +38,12 @@ presentation; preserve motion arrays, prop animation, frame count and fps, and v
 - Try a short piece first to settle coordinates, scale, facing and timing before the full run.
 - Render the complete motion with a wide view and close views of hands, contacts and feet. Look at the frames
   (read the images), not only at numbers. Judge the arms as you would a person's: shoulder, elbow and torso share
-  the movement, and paths curve rather than snap. Look at hands and contacts from other angles than the video's
-  camera too: what that camera cannot see (an object's far side, depth) always looks right from its own view.
+  the movement, and paths curve rather than snap. Review each candidate from the video's camera beside the video,
+  which shows whether it matches, and from the side, which shows depth and an object's far side: those always look
+  right from the video's own view. Look at hands and contacts from other angles too.
   Confirm from the images that a hand really holds what it carries; a small distance alone does not show it.
+  A held object moves with the hand: a person turns it with the wrist and arm, and it turns in the hand only where
+  the fingers can be seen turning it.
 - Frames where a hand or a held object leaves the video's picture, or is hidden, carry no observation of it: the
   motion there is yours to complete, as a person would naturally continue it, and only a camera that sees it shows
   whether it is.
@@ -67,16 +72,22 @@ The result is judged by looking at it, on two things:
   the video cannot tell, choose what is plausible.
 
 And it stays within what a body can do: every joint within a person's range and turning continuously from frame to
-frame, nothing passing through the body, an object or the scene, feet bearing weight where they stand. A joint
-twisted or bent past a person's range, or snapping round between two frames, is a defect to repair, never a
-limitation to record; so is any defect you can see where the video is clear.
+frame, nothing passing through the body, an object or the scene, feet bearing weight where they stand. A joint twisted
+or bent past a person's range, snapping round between two frames, or shaking back and forth is a defect to repair, never
+a limitation to record; so is any defect you can see where the video is clear. Before delivering, measure the delivered
+motion itself on every frame of the whole clip, not only the frames you edited: joints past their range (a character's
+`contact.joints`), a joint moving far more in one frame than on the frames around it or reversing its direction frame
+after frame, the hands and forearms inside the body (a character's `contact.inside_body`), and every link and held
+object against the scene.
 
 ## Deliver
 
 - `final/`: the video as `final/video.mp4` (H.264), a contact sheet of stills, and `notes.md` with what you built, the
   commands that reproduce it, the revisions, and the problems that remain, measured on the delivered motion itself.
+  Unless the request asks for another form, a video's motion is shown from that video's camera beside the video.
   Save the full motion as final/motion.npz with fps and a per-frame turns, positions or qpos array so delivery can
-  verify video coverage. Keep each revision in `revisions/NN/` with its video and one line on what changed and why.
+  verify video coverage, and for each object a hand holds its mesh, its per-frame pose and the frames each hand holds
+  it. Keep each revision in `revisions/NN/` with its video and one line on what changed and why.
   Say plainly that playback is kinematic unless you simulated physics.
 - Before you finish, confirm with `ffprobe` that `final/video.mp4` decodes without errors and has `motion.npz`'s frame
   count and fps.
@@ -93,8 +104,8 @@ your total GPU memory under it. Bound every process you start.
 ## Tools
 
 Each tool has a setup file in `runs/motion_gen/env/` (`kimodo.sh`, `gvhmr.sh`, `blender.sh`, `character.sh`,
-`wilor.sh` and `sam3.sh`), written by `src/roboskills/workflows/motion_gen/setup.sh`: if that folder is missing, run
-it once from the repository root.
+`sam3.sh`, and `wilor.sh` where MANO is installed), written by `src/roboskills/workflows/motion_gen/setup.sh`: if
+that folder is missing, run it once from the repository root.
 Source it in the shell that runs the tool; it names the Python to use and shows a minimal verified call. Each tool
 has its own Python environment: keep a tool's scripts, inputs and outputs here, and do not install packages into it;
 make your own venv here if you need more packages. The
@@ -109,12 +120,12 @@ the Unitree G1 body directly (29 joints, no fingers), 30 fps, about 10 s per cal
 With the human model `kimodo.sh` names (`MOTION_KIMODO_HUMAN_MODEL`, SMPL-X),
 `$KIMODO_PYTHON -m kimodo.scripts.generate "PROMPT" --model "$MOTION_KIMODO_HUMAN_MODEL" --duration 5 --output
 work/body` also writes `work/body_amass.npz`, the AMASS SMPL-X file the character skill reads. Period-separated phase
-prompts with a space-separated duration string generate a longer coherent action in one call. If the environment sets
-`TEXT_ENCODER_MODE=local`, Kimodo encodes locally and needs no encoder service. Otherwise its text encoder is a
-service (about 15 GB of GPU memory, ready after about 40 s): `kimodo.sh` says whether one is already running or how
-to start one; stop one you started when
-done. Output `STEM.csv`: per frame root xyz, root quaternion
-wxyz and the 29 joint angles, Z-up, +X forward (MuJoCo frame). `STEM.npz`: joints, rotations and foot contacts in
+prompts with a space-separated duration string generate a longer coherent action in one call. The prompt is encoded
+by the text encoder serving at `TEXT_ENCODER_URL`, or, when none answers, in the generating process (about 15 GB more
+GPU memory, and a minute or two per call to load it); for several calls start one encoder as `kimodo.sh` shows and
+stop it when done.
+Output `STEM.csv`: per frame root xyz, root quaternion wxyz and the 29 joint angles, Z-up, +X forward (MuJoCo frame).
+`STEM.npz`: joints, rotations and foot contacts in
 Kimodo's frame, Y-up, +Z forward, +X to the robot's left. `--constraints FILE.json` uses Kimodo's frame and starts at
 root (0, 0) facing +Z, e.g. `[{"type": "root2d", "frame_indices": [0, 119], "smooth_root_2d": [[0, 0], [0.5, 2.0]]}]`;
 `right-hand`, `left-hand`, `right-foot` and `left-foot` constraints take a whole G1 pose per constrained frame:
@@ -133,9 +144,11 @@ were trained on clips of at most 10 s: plan a longer action as phases on one tas
 at 30 fps. The world frame is Y-up in metres with the ground near y = 0; `transl` is not the pelvis position, so run
 the SMPL-X model for joints (only SMPL-X body models are installed). With several people it keeps the largest track;
 to choose a person, write `<output_dir>/preprocess/bbx.pt` with that person's per-frame `bbx_xyxy` and `bbx_xys`
-before calling it, and use a fresh output directory per person.
+before calling it, and use a fresh output directory per person. It can read a fast turn backwards for a few frames or throw a joint out for
+one: `python -m roboskills.tools.gvhmr.repair <output_dir>/smplx.npz` (this repository's environment) re-makes those
+frames from the ones around them, before the motion goes onto a character or a robot.
 
-**WiLoR** (`wilor.sh`): a video's hands, which GVHMR does not give. Per frame its detector gives hand
+**WiLoR** (`wilor.sh`, where it exists): a video's hands, which GVHMR does not give. Per frame its detector gives hand
 boxes and left or right, and per box the model gives MANO's `global_orient` and `hand_pose` (15 joints, each in its
 parent), `pred_keypoints_3d` (21) and `pred_cam`. A visible hand's shape and turn are good; a small, blurred or
 covered one is often missed or read flipped. It reads each hand from a crop of the frame it is given, so give it the
@@ -148,9 +161,9 @@ below a wrong detection, at the default threshold of 0.3; a second phrasing and 
 it. A mask says where the object is in the picture; its depth, and its turn about an axis it is symmetric about, it
 cannot tell.
 
-**Characters** (`character.sh`): a person's SMPL-X motion (a video's GVHMR, or Kimodo's) onto a Mixamo character, and
-its joints and skin measured against an object. `character.sh` sets `CHARACTER_SKILL`, the path of its SKILL.md:
-read that file before using it.
+**Characters** (`character.sh`): a person's SMPL-X motion (a video's GVHMR, or Kimodo's) onto a Mixamo character (four
+are ready in `runs/motion_gen/characters/`), and its joints and skin measured against an object. `character.sh` sets
+`CHARACTER_SKILL`, the path of its SKILL.md: read that file before using it.
 
 **Blender** (`blender.sh`): the `bpy` module, for FBX characters and rendering. Set the scene fps before importing an
 animated GLB. For several actors and props in Blender 4.5, export their intended active actions together with
@@ -219,15 +232,17 @@ for each `cfg.solver.optimizer` entry: the default fused dense Cholesky can exce
 on larger full-body models. Verify a nontrivial reachable target before the complete clip; a zero-error rest
 pose does not establish that a GPU kernel ran. The solver keeps the robot clear of a scene it is given, on every
 frame at once, which an edit to one stretch of the motion does not; it does not choose the path for you (over a
-rim rather than through it), and its spheres can miss small parts such as fingers:
+rim rather than through it). Give it the scene as
 `IKSolver(..., scene=WarpScene(...))` with the scene's surfaces as `robokit.geom` boxes or meshes, the robot loaded
 with its collision spheres (`Robot.load(urdf, load_collision_spheres=True, collision_spheres_path=...)`; a robot
 module's `COLLISION_SPHERE_PATH`). `robokit/examples/motion_plan/09_humanoid_offline.py` plans G1 hand goals around
 scene boxes with both feet planted. What the robot touches stays in its scene: a contact rests on the surface rather
 than opening a hole in it. That example gives the foot spheres zero margin so standing on the floor costs nothing;
 `robokit/examples/grasp/01_basic.py` keeps the grasped object in the collision scene and pulls chosen contact points
-onto its surface. The spheres approximate the links, so keep the preset's clearance margin, and check clearance on the
-native link surfaces (the robot's geometry queries).
+onto its surface. The spheres approximate the links, so keep the preset's clearance margin. Build the collision scene
+from the same geometry the scene renders (a rail or upright that is drawn but left out of it is passed through), keep
+all the robot's collision spheres (subsampling them drops some), and check the delivered motion with the robot's
+native link surfaces (the robot's geometry queries) against that rendered geometry.
 Inspect a different SDK's signature once rather than mixing this runtime with the repository venv.
 
 `Robot.load(urdf, load_meshes=True)` loads native link surfaces from
