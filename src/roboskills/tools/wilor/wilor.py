@@ -23,7 +23,8 @@
 # ///
 """Hands in a video with WiLoR, per frame a detector's boxes and per box MANO's turns and keypoints, in its own
 environment (`uv run` of this file: the verified environment's versions). WiLoR's checkout and released weights are
-made once in ~/.roboskills/weights/wilor (`prepare`); it is not a package, so put it on PYTHONPATH.
+made once in ~/.roboskills/weights/wilor (`prepare`); it is not a package, so put it on PYTHONPATH. `usable(hands,
+frames)` reads its hands.npz as one left and one right hand per frame.
 
     python -m roboskills.tools.wilor --video V --out hands/
 """
@@ -33,7 +34,10 @@ import os
 import subprocess
 import sys
 import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
+
+import numpy as np
 
 
 CHECKOUT = Path.home() / ".roboskills/weights/wilor"
@@ -43,6 +47,7 @@ WEIGHTS = {
     "wilor_final.ckpt": "3e97aafc7dd08d883a4cc5a027df61fdb6fda6136dbd1319405413862ada6bb2",
     "detector.pt": "5ef3df44e42d2db52d4ffe91f83a22ce9925e2acc9abebf453f2c5d22e380033",
 }
+GAP = 10  # frames a hand may go undetected before its track is dropped (a third of a second at 30 fps)
 
 
 def prepare(mano: Path = Path.home() / ".robokit/body_models/mano") -> Path:
@@ -83,7 +88,6 @@ def detect_hands(video: Path, out: Path, mano: Path = Path.home() / ".robokit/bo
 def detect(video, out):
     """`detect_hands`' model side."""
     import cv2
-    import numpy as np
     import torch
     from ultralytics import YOLO
     from wilor.datasets.vitdet_dataset import ViTDetDataset
@@ -118,6 +122,59 @@ def detect(video, out):
     keys = ["frame", "box", "right", "global_orient", "hand_pose", "betas", "keypoints_3d", "keypoints_2d"]
     as_array = lambda v: v.detach().cpu().numpy() if torch.is_tensor(v) else np.asarray(v)  # noqa: E731
     np.savez_compressed(out, focal=float(focal), **{k: np.array([as_array(r[k]) for r in rows]) for k in keys})
+
+
+def assign(h: Mapping[str, np.ndarray], frames: int) -> dict[str, dict[int, int]]:
+    """Which detection row is each side's hand per frame: the detector's left/right label is often wrong, so a hand
+    keeps to the detection whose wrist (in the picture) is nearest its last one; the label only breaks ties and seeds
+    the track. A detection that jumps more than 1.5 hand-box diagonals from the side's last wrist is dropped; a side
+    unassigned for `GAP` frames (turned away, out of view) forgets its last wrist and the label seeds it again."""
+    wrist, box, label = h["keypoints_2d"][:, 0], h["box"], h["right"].astype(bool)
+    size = np.median(np.linalg.norm(box[:, 2:] - box[:, :2], axis=1))
+    by_frame = {}
+    for k, f in enumerate(h["frame"]):
+        by_frame.setdefault(int(f), []).append(k)
+    last, seen = {"Left": None, "Right": None}, {"Left": 0, "Right": 0}
+    out = {"Left": {}, "Right": {}}
+    for t in range(frames):
+        last = {side: w if t - seen[side] <= GAP else None for side, w in last.items()}
+        rows = by_frame.get(t, [])[:3]
+        best, best_cost = {}, np.inf
+        options = [(a, b) for a in [None, *rows] for b in [None, *rows] if a is None or a != b]
+        for left, right in options:
+            cost = 0.0
+            for side, k, want in (("Left", left, False), ("Right", right, True)):
+                if k is None:
+                    cost += 1.0  # leaving a hand unassigned
+                    continue
+                cost += 0.3 * (label[k] != want)
+                if last[side] is not None:
+                    jump = np.linalg.norm(wrist[k] - last[side]) / size
+                    cost += jump if jump < 1.5 else np.inf
+            if cost < best_cost:
+                best, best_cost = {"Left": left, "Right": right}, cost
+        for side, k in best.items():
+            if k is not None:
+                out[side][t], last[side], seen[side] = k, wrist[k], t
+    return out
+
+
+def usable(h: Mapping[str, np.ndarray], frames: int) -> dict[str, dict[int, int]]:
+    """`assign`'s detections that can be used as they are: one whose label is not its side was read with the other
+    hand's chirality, and one turned more than 60 degrees from most of its detected neighbours within 4 frames was read
+    flipped (palm in for palm out); both are dropped."""
+    from scipy.spatial.transform import Rotation  # not in WiLoR's own environment
+
+    out = {}
+    for side, rows in assign(h, frames).items():
+        rows = {t: k for t, k in rows.items() if bool(h["right"][k]) == (side == "Right")}
+        turn = {t: Rotation.from_matrix(h["global_orient"][k]) for t, k in rows.items()}
+        out[side] = {}
+        for t, k in rows.items():
+            near = [u for u in rows if u != t and abs(u - t) <= 4]
+            if len(near) < 2 or np.median([(turn[t].inv() * turn[u]).magnitude() for u in near]) < np.radians(60):
+                out[side][t] = k
+    return out
 
 
 if __name__ == "__main__":

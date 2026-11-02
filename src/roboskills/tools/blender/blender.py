@@ -80,9 +80,9 @@ def import_character(source: Path, out: Path):
     blender_script("rig.py", "import", Path(source).resolve(), Path(out).resolve())
 
 
-def render_motion(character: Path, motion: Path, video: Path, out: Path, engine: str = "cycles"):
+def render_motion(character: Path, motion: Path, video: Path | None, out: Path, engine: str = "cycles"):
     """out/scene.glb: the `character` GLB animated by `motion`; out/frames/: every frame in motion_studio.py;
-    out/video.mp4; and out/compare.mp4: the source `video` | the render."""
+    out/video.mp4; and given a source `video`, out/compare.mp4: the `video` | the render."""
     character, motion, out = Path(character).resolve(), Path(motion).resolve(), Path(out).resolve()
     shutil.rmtree(out / "frames", ignore_errors=True)  # the renderer keeps the frames it finds
     out.mkdir(parents=True, exist_ok=True)
@@ -95,6 +95,8 @@ def render_motion(character: Path, motion: Path, video: Path, out: Path, engine:
     fps = float(np.load(motion)["fps"])
     frames = ["-framerate", str(fps), "-start_number", "0", "-i", out / "frames/%04d.png"]
     subprocess.run([*ffmpeg, *frames, *encode, out / "video.mp4"], check=True)
+    if video is None:
+        return
     stack = f"[0:v]fps={fps},scale=-2:540[v0];[1:v]scale=-2:540[v1];[v0][v1]hstack=inputs=2"
     inputs = ["-i", video, "-i", out / "video.mp4"]
     subprocess.run([*ffmpeg, *inputs, "-filter_complex", stack, *encode, out / "compare.mp4"], check=True)

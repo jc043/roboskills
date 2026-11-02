@@ -25,6 +25,12 @@ camera frame (focal `focal`, centred) and `keypoints_2d` (21, 2) in image pixels
 `pred_mano_params` and `pred_keypoints_3d`, and `pred_cam`; `wilor.utils.renderer.cam_crop_to_full` places a hand in
 the full image (flip `pred_cam`'s x for a left hand).
 
+**One hand per side:** `usable(hands, frames)` reads `hands.npz` as `{"Left": {frame: row}, "Right": {...}}`:
+`assign` keeps each side to the detection whose wrist (in the picture) continues its track, the label only seeding
+and breaking ties, and lets a side lost for `GAP` frames (10) be seeded again; `usable` then drops a detection whose
+label is the other side's (read with the wrong chirality) or turned over 60 degrees from its neighbours (read
+flipped). motion_gen's character fingers and RoboKit's `humanoid` read the hands this way.
+
 **GPU memory:** about 3.2 GB with batches of 32 crops. Batched on an RTX 3090, the detector takes 20-40 ms per 1080p
 frame and the model about 50 ms per hand. Cutting a crop on the CPU took 0.7-3 s per hand on a loaded shared host, the
 largest cost: prepare crops in parallel. Loading takes about 10 s.

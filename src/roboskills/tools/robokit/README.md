@@ -62,6 +62,9 @@ is at most 0.6 m under the lowest shoulder, so a table under an arm on a pedesta
 
 Call `Sam.close()` after its final request, before reusing its GPU ([SAM 3](../sam3/SKILL.md)).
 
+`humanoid.retarget_person` puts a video's person (GVHMR's body, WiLoR's hands) on the G1 with Inspire hands for
+motion_gen; see [SKILL.md](SKILL.md).
+
 Tests: `python -m pytest tests/tools/robokit tests/workflows/agent_as_policy`.
 
 ## Reference

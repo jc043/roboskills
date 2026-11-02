@@ -2,7 +2,8 @@
 
 `joints(character, turns)`: every joint's bend, sideways bend and twist from its rest (degrees, about the joint's
 anatomical axes), and how far past a person's range each is. `touch(...)`: each hand bone's skin distance to an
-object's surface per frame (mm, negative inside)."""
+object's surface per frame (mm, negative inside); `inside_body(...)`: each hand and forearm bone's to the rest of the
+body."""
 
 import re
 
@@ -153,3 +154,17 @@ def touch(character: Character, turns: np.ndarray, joints_: np.ndarray, side: st
     local = np.einsum("tij,tvj->tvi", inv[:, :3, :3], skin) + inv[:, None, :3, 3]
     d = _distance(np.asarray(vertices, float), np.asarray(faces), local.reshape(-1, 3), device).reshape(len(turns), -1)
     return {hand[b]: d[:, owner[ids] == b].min(1) * 1000 for b in set(owner[ids].tolist())}
+
+
+def inside_body(character: Character, turns: np.ndarray, joints_: np.ndarray,
+                device: str = "cuda:0") -> dict[str, np.ndarray]:  # fmt: skip
+    """Per hand and forearm bone of both sides (``LeftForeArm``, ``RightHandIndex2``...): its skin's deepest point
+    inside the rest of the posed skin [T] (mm, negative inside; positive, its nearest clearance), for turns [T, J, 3, 3]
+    and joint positions [T, J, 3]. The rest is all but both arms from the shoulder down: robes and skirts count as body."""
+
+    names, owner = sorted(character.roles, key=character.bone), character.skin_weights.argmax(1)  # each bone's role
+    of = lambda parts: np.array([bool(re.match(f"(Left|Right)({parts})", r)) for r in names])[owner]  # noqa: E731
+    ids = np.flatnonzero(of("ForeArm|Hand"))
+    faces = character.faces[~of("Shoulder|Arm|ForeArm|Hand")[character.faces].any(1)]
+    d = np.stack([_distance(s, faces, s[ids], device) for s in skinned(character, turns, joints_)]) * 1000
+    return {names[b]: d[:, owner[ids] == b].min(1) for b in set(owner[ids].tolist())}

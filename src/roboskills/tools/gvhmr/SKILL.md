@@ -23,6 +23,8 @@ for joints.
 **GPU memory:** about 7 GB and 25 s per 4 s clip.
 
 **Known failures:** it keeps the largest person's track (write `preprocess/bbx.pt` to choose one); its wrists are
-guesses; Triton compiles a launcher at run time, so the host needs GCC and libc headers.
+guesses; it can read a fast turn backwards for a few frames or throw a joint out for one, which
+`python -m roboskills.tools.gvhmr.repair smplx.npz` re-makes (`recover_motion` runs it); Triton compiles a launcher at
+run time, so the host needs GCC and libc headers.
 
 **Upstream:** [GVHMR](https://github.com/zju3dv/GVHMR).

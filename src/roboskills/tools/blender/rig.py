@@ -6,10 +6,11 @@
 motion_studio.py's). `import_character` and `animate_character` in blender.py run it.
 
     python rig.py import CHARACTER.fbx OUT.glb
-    python rig.py animate CHARACTER.glb MOTION.npz OUT.glb
+    python rig.py animate CHARACTER.glb MOTION.npz OUT.glb   # or a robot's ROBOT.glb
 
 MOTION holds fps, turns [T, J, 3, 3] and positions [T, J, 3] of joint_names, and their rest_joints [J, 3] (the
-workflow's `retarget_motion`). The character's other bones follow their parents.
+workflow's `retarget_motion`). The character's other bones follow their parents. A robot's MOTION names link_names
+instead (tools/robokit/humanoid.py): each GLB object of a link's name moves as that link.
 """
 
 import sys
@@ -50,8 +51,32 @@ def import_character(source: str, out: str) -> None:
     import bpy
 
     clear()
-    bpy.ops.import_scene.fbx(filepath=source)
+    bpy.ops.wm.fbx_import(filepath=source)  # the native importer also reads FBX 6.1, as most Mixamo files are
     export(out, False)
+
+
+def animate_robot(robot: str, motion: str, out: str) -> None:
+    import bpy
+    from mathutils import Matrix
+
+    d = np.load(motion)
+    clear()
+    scene = bpy.context.scene
+    scene.render.fps, scene.render.fps_base = round(float(d["fps"])), round(float(d["fps"])) / float(d["fps"])
+    scene.frame_start, scene.frame_end = 0, len(d["turns"]) - 1
+    bpy.ops.import_scene.gltf(filepath=robot)
+    moves = rigid(d["turns"], d["positions"], np.zeros((len(d["link_names"]), 3)))
+    for i, name in enumerate(str(n) for n in d["link_names"]):
+        if (link := scene.objects.get(name)) is None:  # a link without a mesh
+            continue
+        link.rotation_mode = "QUATERNION"
+        for t, matrix in enumerate(moves[:, i]):
+            link.matrix_world = Matrix(matrix.tolist())
+            link.keyframe_insert("rotation_quaternion", frame=t)
+            link.keyframe_insert("location", frame=t)
+    # every link's action in one animation, as the glTF importer plays one at a time
+    bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", export_animations=True,
+                              export_animation_mode="ACTIVE_ACTIONS", export_merge_animation="ACTION")  # fmt: skip
 
 
 def animate_character(character: str, motion: str, out: str) -> None:
@@ -59,6 +84,8 @@ def animate_character(character: str, motion: str, out: str) -> None:
     from mathutils import Matrix
 
     d = np.load(motion)
+    if "link_names" in d:
+        return animate_robot(character, motion, out)
     fps, names = float(d["fps"]), [str(n) for n in d["joint_names"]]
     clear()
     scene = bpy.context.scene

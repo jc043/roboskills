@@ -54,3 +54,6 @@ def test_render_motion_bakes_renders_fresh_then_encodes(monkeypatch, tmp_path):
     assert runs[0][3].endswith("rig.py") and runs[0][4] == "animate" and runs[0][-1] == str(tmp_path / "out/scene.glb")
     assert runs[1][3].endswith("motion_studio.py") and "--final" in runs[1] and runs[1][-1] == "eevee"
     assert runs[2][-1].endswith("video.mp4") and runs[3][-1].endswith("compare.mp4")
+    runs.clear()
+    blender.render_motion(tmp_path / "c.glb", tmp_path / "motion.npz", None, tmp_path / "out", "eevee")
+    assert len(runs) == 3 and runs[2][-1].endswith("video.mp4")  # without a source video, no compare.mp4

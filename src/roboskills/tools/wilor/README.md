@@ -2,7 +2,8 @@
 
 WiLoR localizes hands in an image with a real-time detector and reconstructs each one as a MANO hand, refined from
 multi-scale image features. Here `python -m roboskills.tools.wilor --video V --out hands/` runs it in its own `uv`
-environment on every frame and writes each detected hand's MANO parameters and keypoints. See [SKILL.md](SKILL.md).
+environment on every frame and writes each detected hand's MANO parameters and keypoints; `usable(hands, frames)`
+reads them as one left and one right hand per frame. See [SKILL.md](SKILL.md).
 
 ## Example
 
