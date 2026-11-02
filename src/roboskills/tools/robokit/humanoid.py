@@ -31,6 +31,7 @@ FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 SMOOTH = 1.5  # frames of the Gaussian on a seen hand's turn: WiLoR's shakes a few degrees a frame
 SIDES = ("left", "right")
 BODY_SETTLE = 40  # solves of the body's first frame before the clip: from rest, each moves only so far
+LIFTS = 4  # solves at most with the feet planted, each asking a foot that sank up again
 SETTLE = 4  # solves of the first frame before the clip: one, from rest, leaves the fingers short of it
 COLOUR = (0.06, 0.065, 0.075, 1.0)  # the links' one material (linear): dark grey against the studio's light floor
 
@@ -354,8 +355,9 @@ def retarget_person(smplx: Path, out: Path, hands: Path | None = None, robot: st
     `joint_names`, RoboKit's actuated order), each of `link_names`' world turn `turns` [T, L, 3, 3] and origin
     `positions` [T, L, 3] (the feet on z = 0 where `planted` [T, 4], `feet.down`'s heels and toes) and
     `studio_camera_direction` toward the video's camera; out/robot.glb, the link meshes (`glb`). The body is solved
-    twice, frame after frame, the second time with the person's feet moved where they plant the robot's (`plant`,
-    `aim`). Returns per side whether WiLoR gave the hand and whether the robot's hand was retargeted."""
+    frame after frame, then again with the person's feet moved where they plant the robot's (`plant`, `aim`), a foot
+    that sank asked up (`feet.lift`). Returns per side whether WiLoR gave the hand and whether the robot's hand was
+    retargeted."""
     from robokit.helpers.humanoid_retargeting import HumanoidRetargeterOnline
     from robokit.smplx import SMPLX_JOINT_NAMES
     from robokit.xform.numpy import pose7_to_tf_mat
@@ -379,10 +381,19 @@ def retarget_person(smplx: Path, out: Path, hands: Path | None = None, robot: st
         return np.concatenate([body.solve_numpy(frames[t : t + 1], tall) for t in range(len(frames))])
 
     tracked, sole = soles(b)
-    planted_at = plant(b, tracked, sole, solve(), planted, fps)
-    for k, link in enumerate(tracked):  # the feet planted on a second solve
-        aim(b.mapping, names, frames, link, planted_at[:, k], height)
-    solved = solve()
+    planted_at, up = plant(b, tracked, sole, solve(), planted, fps), np.zeros((len(poses), 2))
+    for _ in range(LIFTS):  # the feet planted, solved again: a foot that sank asked up (`feet.lift`)
+        for k, link in enumerate(tracked):
+            asked = planted_at[:, k].copy()
+            asked[:, 2, 3] += up[:, k]
+            aim(b.mapping, names, frames, link, asked, height)
+        solved = solve()
+        at = b.kin.forward_kinematics_via_matrix_numpy(solved[:, 7:], pose7_to_tf_mat(solved[:, :7]), device="cpu")
+        at = at[:, [b.kin.spec.link_names.index(n) for n in tracked]]
+        settled = feet.lift(up, feet.lowest(sole, at[..., :3, :3], at[..., :3, 3]).reshape(-1, 2, 2).min(2))
+        if np.abs(settled - up).max() < feet.SINK_M:
+            break
+        up = settled
     names = list(b.robot.spec.actuated_joint_names)
     qpos = np.zeros((len(poses), 7 + len(names)), np.float32)
     qpos[:, :7] = solved[:, :7]
@@ -391,8 +402,6 @@ def retarget_person(smplx: Path, out: Path, hands: Path | None = None, robot: st
         limits = b.robot.spec.actuated_joint_limits[hand.columns]
         fingers = fit_fingers(hand, tracks[side][0], side == "right", device)
         qpos[:, [7 + c for c in hand.columns]] = np.clip(fingers, limits[:, 0], limits[:, 1])
-    at = b.kin.forward_kinematics_via_matrix_numpy(solved[:, 7:], pose7_to_tf_mat(solved[:, :7]), device="cpu")
-    at = at[:, [b.kin.spec.link_names.index(n) for n in tracked]]
     low = feet.lowest(sole, at[..., :3, :3], at[..., :3, 3])  # the floor where planted soles stand, else lowest
     floor = np.median(np.where(planted, low, np.inf).min(1)[planted.any(1)]) if planted.any() else low.min()
     links = b.robot.forward_kinematics_via_matrix_numpy(qpos[:, 7:], pose7_to_tf_mat(qpos[:, :7]), device="cpu")

@@ -28,22 +28,23 @@ so they come with your own account; get only what you make:
 | a text's motion on a character or robot  | SMPL-X and [Llama 3 8B Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct) |
 | anything, by the agent                   | what the request needs, and [SAM 3](https://huggingface.co/facebook/sam3) for its objects    |
 
-Download SMPL-X and MANO from their sites (an account each); `SMPLX_ZIP=<zip> MANO_ZIP=<zip> bash .../setup.sh` puts
-their files in `~/.robokit/body_models/`, and setup ends by naming what is still missing. Llama 3 and SAM 3 need access
+Download SMPL-X (`models_smplx_v1_1.zip`) and MANO (`mano_v1_2.zip`) from their sites (an account each); setup puts
+their files in `~/.robokit/body_models/` and ends by naming what is still missing. Llama 3 and SAM 3 need access
 granted on Hugging Face and `uv run hf auth login`. Setup also downloads four ready characters (athlete, dancer,
 hoodie, bob) into `runs/motion_gen/characters/`; any Mixamo character works too.
 
 ```sh
 git clone https://github.com/openrobokit/roboskills && cd roboskills && uv sync  # every command below runs from here
-bash src/roboskills/workflows/motion_gen/setup.sh  # once per machine
-# The agent in this repo (the motion-gen skill); one instruction runs commands unasked: use a machine you trust
+SMPLX_ZIP=<models_smplx_v1_1.zip> MANO_ZIP=<mano_v1_2.zip> bash src/roboskills/workflows/motion_gen/setup.sh  # once per machine
+# The agent in this repo (the motion-gen skill). Claude's auto mode has each command checked before it runs;
+# --permission-mode bypassPermissions and Codex's flag run every command unasked: use them on a machine you trust
 claude  # then: /motion-gen make runs/motion_gen/characters/dancer.glb wave.
-claude -p --permission-mode bypassPermissions "/motion-gen make runs/motion_gen/characters/dancer.glb wave."
-claude -p --permission-mode bypassPermissions "/motion-gen put the person in assets/example_data/tennis.mp4 on runs/motion_gen/characters/dancer.glb."
+claude -p --permission-mode auto "/motion-gen make runs/motion_gen/characters/dancer.glb wave."
+claude -p --permission-mode auto "/motion-gen put the person in assets/example_data/tennis.mp4 on runs/motion_gen/characters/dancer.glb."
 codex exec --dangerously-bypass-approvals-and-sandbox '$motion-gen make runs/motion_gen/characters/dancer.glb wave.'
 codex exec --dangerously-bypass-approvals-and-sandbox '$motion-gen make runs/motion_gen/characters/dancer.glb wave. Deliver within 30 minutes.'  # a time limit only when you want one
 # The agent anywhere: it clones and sets up the repository itself
-claude -p --permission-mode bypassPermissions "Follow the motion-gen skill in github.com/openrobokit/roboskills to make its dancer character wave."
+claude -p --permission-mode auto "Follow the motion-gen skill in github.com/openrobokit/roboskills to make its dancer character wave."
 ```
 
 ## Video to character

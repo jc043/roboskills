@@ -126,7 +126,7 @@ done
 echo "Tools ready in $E; characters in $REPO/runs/motion_gen/characters"
 
 # What is yours to provide and still missing
-token=${HF_TOKEN:-$(cat "${HF_HOME:-$HOME/.cache/huggingface}/token" 2>/dev/null)}
+token=${HF_TOKEN:-$(cat "${HF_HOME:-$HOME/.cache/huggingface}/token" 2>/dev/null || true)}  # none yet: not logged in
 ls "$BODY"/smplx/SMPLX_NEUTRAL.* > /dev/null 2>&1 ||
   echo "Missing SMPL-X (a video's person, motion on a character): register at https://smpl-x.is.tue.mpg.de, download its models_smplx_v1_1.zip, rerun this with SMPLX_ZIP=<that zip>"
 [ -n "$WILOR" ] ||

@@ -25,7 +25,7 @@ WEIGHTS = {"Hips": (30, 2), "Spine": TURN, "Spine1": TURN, "Spine2": (0.7, 0.7),
            "Foot": (30, 2), "ToeBase": (30, 1)}  # role, its side's if it has one -> position, orientation  # fmt: skip
 SETTLE = 8  # solves of the first frame before the clip: one, from the T-pose, leaves the arms short of it
 LIMB = 0.1  # metres a foot or hand may stray from its target
-STEPS = 3  # solves after the first, each letting the feet that could not hold their spot step
+STEPS = 3  # solves after the first: a foot that could not hold its spot steps, a sole that sank is asked up
 SOLES = ("LeftFoot", "LeftToeBase", "RightFoot", "RightToeBase")  # a character's sole bones, in `feet.down`'s order
 
 
@@ -96,9 +96,10 @@ def retarget_motion(motion: Path, character: Path, out: Path):
     solver.warmup(1)
     bones = [c.joint_names.index(b) for b in solver.human_joint_names]
     wxyz = Rotation.from_matrix(wanted[:, bones].reshape(-1, 3, 3)).as_quat()[:, [3, 0, 1, 2]]
-    soles_ = character_soles(c)
-    for _ in range(STEPS + 1):  # a planted foot the legs cannot keep on its spot steps, and the clip is solved again
+    soles_, up = character_soles(c), np.zeros((len(wanted), len(SOLES)))  # each sole asked up by what solves sank it
+    for _ in range(STEPS + 1):
         aim = feet.plant(soles_, wanted, positions(c, wanted, root), planted, fps)
+        aim[:, soles_.index, 2] += up
         frames = np.concatenate((aim[:, bones], wxyz.reshape(len(wanted), len(bones), 4)), axis=2)
         solve = lambda t: solver.solve_numpy(frames[t : t + 1], human_heights=np.ones(1))  # noqa: E731
         for _ in range(SETTLE):
@@ -107,9 +108,11 @@ def retarget_motion(motion: Path, character: Path, out: Path):
         solved = turns(c, r, qpos)
         joints = positions(c, solved, qpos[:, :3])
         off = np.linalg.norm(joints[:, soles_.index] - aim[:, soles_.index], axis=-1) > LIMB / 2
-        if not (miss := (off & planted).reshape(-1, 2, 2).any(2)).any():
+        miss = (off & planted).reshape(-1, 2, 2).any(2)
+        lift = feet.lift(up, feet.lowest(soles_, solved, joints))
+        if not miss.any() and np.abs(lift - up).max() < feet.SINK_M:
             break
-        planted = feet.step(planted, miss, fps)
+        planted, up = feet.step(planted, miss, fps), lift
     low = np.where(planted, feet.lowest(soles_, solved, joints), np.inf).min(1)  # the floor: where planted soles stand
     floor = np.array([0.0, 0.0, np.median(low[planted.any(1)]) if planted.any() else skinned(c, solved, joints)[..., 2].min()])  # fmt: skip
     np.savez(out / "motion.npz", fps=fps, turns=solved, positions=joints - floor, joint_names=np.array(c.joint_names),
